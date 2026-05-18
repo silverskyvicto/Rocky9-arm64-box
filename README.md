@@ -1,1 +1,98 @@
 # Rocky9-arm64-box
+
+Rocky Linux 9.7 aarch64 の Vagrant box を、Apple Silicon Mac 上の QEMU/HVF 向けに作成するための Packer 設定です。
+
+## 前提
+
+- Apple Silicon Mac
+- Homebrew 版 QEMU
+- Packer
+- Vagrant
+- vagrant-qemu plugin
+- p7zip
+
+```sh
+brew install qemu packer p7zip
+vagrant plugin install vagrant-qemu
+```
+
+## ビルド
+
+通常は次のコマンドだけで、boot assets の抽出、Packer 設定検証、box 作成まで実行します。
+
+```sh
+make build
+```
+
+生成される box は次のファイルです。
+
+```text
+rocky9-arm64-qemu.box
+```
+
+作成した box は次のように追加できます。
+
+```sh
+vagrant box add --force rocky9-arm64-qemu rocky9-arm64-qemu.box
+```
+
+## ISO の指定
+
+`make build` は `scripts/extract-boot.sh` を先に実行します。このスクリプトは次の順で Rocky Linux 9.7 aarch64 minimal ISO を探します。
+
+1. `ISO_PATH` で指定された ISO
+2. Packer のキャッシュディレクトリ、通常は `~/.cache/packer`
+3. `packer_cache/Rocky-9.7-aarch64-minimal.iso` へのダウンロード
+
+ISO の checksum は `scripts/resolve-iso-checksum.sh` が `Rocky-9.7-aarch64-minimal.iso.CHECKSUM` を取得して解決します。取得した CHECKSUM ファイルは `packer_cache/` に保存され、Git には含めません。Packer 実行時も `Makefile` から `rocky_iso_checksum` 変数として渡します。
+
+ローカルに ISO がある場合は、次のように指定できます。
+
+```sh
+ISO_PATH=/path/to/Rocky-9.7-aarch64-minimal.iso make build
+```
+
+## なぜ boot/ を抽出するのか
+
+この Packer 設定では QEMU の direct kernel boot を使います。
+
+```hcl
+["-kernel", var.boot_kernel],
+["-initrd", var.boot_initrd],
+["-append", "... inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ks.cfg ..."],
+```
+
+つまり、ISO 内の GRUB を経由せず、ISO に含まれるインストーラ用 `vmlinuz` と `initrd.img` を QEMU に直接渡して Anaconda を起動します。そのため、ビルド前に ISO から次の2ファイルを取り出しておく必要があります。
+
+```text
+boot/vmlinuz
+boot/initrd.img
+```
+
+本リポジトリではこれを手作業にせず、`scripts/extract-boot.sh` と `Makefile` で自動化しています。`boot/` は ISO から再生成できる大きめのバイナリなので Git には含めません。
+
+## direct kernel boot を採用した理由
+
+当初は通常の ISO ブート、つまり UEFI から ISO 内の GRUB メニューを起動し、Packer の `boot_command` で Kickstart パラメータを入力する方式も試しました。しかし Apple Silicon Mac 上の QEMU/VNC 経由入力では、GRUB へのキー入力タイミングや入力位置が不安定で、Kickstart なしの通常インストーラへ落ちることがありました。
+
+direct kernel boot では GRUB へのキー入力を避けられます。Packer が QEMU に `-kernel`、`-initrd`、`-append` を直接渡すため、Kickstart URL や serial console の指定が安定して反映されます。
+
+一方で direct kernel boot のまま `reboot` すると、インストール後も再びインストーラ用カーネルで起動してしまいます。そのため `http/ks.cfg` では `poweroff` を使い、インストール完了後に VM を停止させています。Packer 側は `communicator = "none"` とし、SSH 接続を待たずに VM の停止を待ってから box を作成します。
+
+## 主なファイル
+
+- `rocky9-arm64.pkr.hcl`: Packer/QEMU/Vagrant box 作成設定
+- `http/ks.cfg`: Rocky Linux の Kickstart
+- `scripts/extract-boot.sh`: ISO から `boot/vmlinuz` と `boot/initrd.img` を抽出
+- `scripts/resolve-iso-checksum.sh`: Rocky Linux の CHECKSUM ファイルを取得し、ISO の SHA256 を解決
+- `Makefile`: `make build` などのビルド用入口
+
+## よく使うコマンド
+
+```sh
+make extract-boot
+make validate
+make build
+make clean
+make distclean
+```

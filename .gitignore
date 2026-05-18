@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Packer / QEMU build outputs
+output-*/
+.packer-validate-output/
+box/
+*.box
+
+# VM disk images
+*.qcow2
+*.img
+*.raw
+*.vdi
+*.vmdk
+*.vhd
+*.vhdx
+
+# QEMU / UEFI runtime files
+*.fd
+serial.log
+*.log
+
+# Vagrant local state
+.vagrant/
+
+# Packer cache / temporary files
+packer_cache/
+*.pkrvars.hcl
+*.auto.pkrvars.hcl
+
+# ISO files
+*.iso
+*.iso.CHECKSUM
+
+# Extracted installer boot assets.
+boot
+boot/*
