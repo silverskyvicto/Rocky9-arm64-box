@@ -59,6 +59,21 @@ variable "boot_initrd" {
   default = "boot/initrd.img"
 }
 
+variable "qemu_binary" {
+  type    = string
+  default = "qemu-system-aarch64"
+}
+
+variable "qemu_accelerator" {
+  type    = string
+  default = "hvf"
+}
+
+variable "qemu_machine_type" {
+  type    = string
+  default = "virt,highmem=off"
+}
+
 source "qemu" "rocky9_arm64" {
   vm_name          = "rocky9-arm64"
   output_directory = var.output_directory
@@ -66,11 +81,11 @@ source "qemu" "rocky9_arm64" {
   iso_url      = var.rocky_iso_url
   iso_checksum = var.rocky_iso_checksum
 
-  qemu_binary  = "qemu-system-aarch64"
-  machine_type = "virt,highmem=off"
+  qemu_binary  = var.qemu_binary
+  machine_type = var.qemu_machine_type
   cpu_model    = "host"
 
-  accelerator = "hvf"
+  accelerator = var.qemu_accelerator
 
   cpus   = 2
   memory = 2048
@@ -114,7 +129,7 @@ build {
       "mkdir -p box",
       "cp ${var.output_directory}/rocky9-arm64 box/box.img",
       "cat > box/metadata.json <<'EOF'\n{\"provider\":\"qemu\",\"format\":\"qcow2\",\"virtual_size\":${var.disk_virtual_size},\"architecture\":\"arm64\",\"disks\":[{\"path\":\"box.img\",\"format\":\"qcow2\"}]}\nEOF",
-      "cat > box/Vagrantfile <<'EOF'\nVagrant.configure('2') do |config|\n  config.vm.synced_folder '.', '/vagrant', disabled: true\n\n  config.vm.provider 'qemu' do |qe|\n    qe.arch = 'aarch64'\n    qe.machine = 'virt,accel=hvf,highmem=off'\n    qe.cpu = 'host'\n    qe.smp = '2'\n    qe.memory = '2G'\n    qe.net_device = 'virtio-net-device'\n    qe.drive_interface = 'virtio'\n    qe.qemu_dir = '/opt/homebrew/share/qemu'\n    qe.firmware_format = 'raw'\n  end\nend\nEOF",
+      "cp vagrantfiles/qemu.rb box/Vagrantfile",
       "tar -C box -czf ${var.box_name} box.img metadata.json Vagrantfile"
     ]
   }

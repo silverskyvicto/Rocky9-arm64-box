@@ -1,11 +1,13 @@
 # Rocky9-arm64-box
 
-Rocky Linux 9.7 aarch64 の Vagrant box を、Apple Silicon Mac 上の QEMU/HVF 向けに作成するための Packer 設定です。
+Rocky Linux 9.7 aarch64 の Vagrant box を、Apple Silicon Mac 上の QEMU/HVF または Linux arm64 上の QEMU/KVM 向けに作成するための Packer 設定です。
 
 ## 前提
 
-- Apple Silicon Mac
-- Homebrew 版 QEMU
+- Apple Silicon Mac または Linux arm64/aarch64 ホスト
+- QEMU
+  - macOS: Homebrew 版 QEMU
+  - Linux: `qemu-system-aarch64` と AAVMF/EDK2 firmware
 - Packer
 - Vagrant
 - vagrant-qemu plugin
@@ -18,6 +20,8 @@ brew install qemu packer p7zip xorriso
 vagrant plugin install vagrant-qemu
 ```
 
+Linux arm64 ではディストリビューションに応じて QEMU/KVM と firmware パッケージを入れてください。例として Debian/Ubuntu 系では `qemu-system-arm` と `qemu-efi-aarch64`、RHEL 系では `qemu-kvm` と `edk2-aarch64` が必要です。
+
 ## ビルド
 
 通常は次のコマンドだけで、boot assets の抽出、Packer 設定検証、box 作成まで実行します。
@@ -25,6 +29,8 @@ vagrant plugin install vagrant-qemu
 ```sh
 make build
 ```
+
+`make build` は `scripts/qemu-host-vars.sh` でホストを判定し、macOS arm64 では `hvf`、Linux arm64/aarch64 では `kvm` を Packer に渡します。生成される QEMU 用 box の Vagrantfile も実行時にホストを判定するため、Apple Silicon macOS と Linux arm64 のどちらでも同じ box を起動できます。
 
 生成される box は次のファイルです。
 
@@ -116,6 +122,7 @@ direct kernel boot では GRUB へのキー入力を避けられます。Packer 
 - `http/ks.cfg`: Rocky Linux の Kickstart
 - `http/ks-vbox.cfg`: VirtualBox 用の Rocky Linux Kickstart
 - `scripts/extract-boot.sh`: ISO から `boot/vmlinuz` と `boot/initrd.img` を抽出
+- `scripts/qemu-host-vars.sh`: QEMU build 用の accelerator と EFI firmware path をホストに応じて解決
 - `scripts/prepare-vbox-iso.sh`: VirtualBox 用に GRUB/Kickstart 入り ISO を生成
 - `scripts/resolve-iso-checksum.sh`: Rocky Linux の CHECKSUM ファイルを取得し、ISO の SHA256 を解決
 - `Makefile`: `make build` などのビルド用入口
