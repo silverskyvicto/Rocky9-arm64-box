@@ -9,10 +9,12 @@ Rocky Linux 9.7 aarch64 の Vagrant box を、Apple Silicon Mac 上の QEMU/HVF 
 - Packer
 - Vagrant
 - vagrant-qemu plugin
+- VirtualBox 7.2 以降 (VirtualBox 用 box を作る場合)
 - p7zip
+- xorriso (VirtualBox 用 ISO を作る場合)
 
 ```sh
-brew install qemu packer p7zip
+brew install qemu packer p7zip xorriso
 vagrant plugin install vagrant-qemu
 ```
 
@@ -34,6 +36,34 @@ rocky9-arm64-qemu.box
 
 ```sh
 vagrant box add --force rocky9-arm64-qemu rocky9-arm64-qemu.box
+```
+
+## VirtualBox 用 box のビルド
+
+VirtualBox 用 box は別ターゲットで作成します。
+
+```sh
+make build-vbox
+```
+
+生成される box は次のファイルです。
+
+```text
+rocky9-arm64-virtualbox.box
+```
+
+作成した box は次のように追加できます。
+
+```sh
+vagrant box add --force rocky9-arm64-virtualbox rocky9-arm64-virtualbox.box
+```
+
+VirtualBox 版は QEMU 版と異なり、ISO の UEFI/GRUB から起動します。VirtualBox ARM では Packer のキー入力が使えないため、`scripts/prepare-vbox-iso.sh` が元の Rocky ISO の起動情報を保ったまま GRUB 設定と Kickstart だけを差し替えた VirtualBox 用 ISO を `packer_cache/Rocky-9.7-aarch64-minimal-vbox.iso` に生成します。インストール後は再起動して SSH 接続を待ち、Packer が shutdown してから box 化します。そのため `boot/` の抽出は不要です。また、VirtualBox ではインストールディスクが通常 `sda` として見えるため、専用の `http/ks-vbox.cfg` を使います。
+
+VirtualBox ARM ではインストールに時間がかかることがあるため、SSH 待ちは既定で 90 分にしています。途中状態を確認したい場合は次のデバッグ用ターゲットを使います。失敗時に VM を残し、Packer が停止するので、ログに出る `rdp://127.0.0.1:PORT` へ接続して画面を確認できます。
+
+```sh
+make build-vbox-debug
 ```
 
 ## ISO の指定
@@ -82,8 +112,11 @@ direct kernel boot では GRUB へのキー入力を避けられます。Packer 
 ## 主なファイル
 
 - `rocky9-arm64.pkr.hcl`: Packer/QEMU/Vagrant box 作成設定
+- `rocky9-arm64-virtualbox.pkr.hcl`: Packer/VirtualBox/Vagrant box 作成設定
 - `http/ks.cfg`: Rocky Linux の Kickstart
+- `http/ks-vbox.cfg`: VirtualBox 用の Rocky Linux Kickstart
 - `scripts/extract-boot.sh`: ISO から `boot/vmlinuz` と `boot/initrd.img` を抽出
+- `scripts/prepare-vbox-iso.sh`: VirtualBox 用に GRUB/Kickstart 入り ISO を生成
 - `scripts/resolve-iso-checksum.sh`: Rocky Linux の CHECKSUM ファイルを取得し、ISO の SHA256 を解決
 - `Makefile`: `make build` などのビルド用入口
 
@@ -91,8 +124,12 @@ direct kernel boot では GRUB へのキー入力を避けられます。Packer 
 
 ```sh
 make extract-boot
+make prepare-vbox-iso
 make validate
+make validate-vbox
 make build
+make build-vbox
+make build-vbox-debug
 make clean
 make distclean
 ```
